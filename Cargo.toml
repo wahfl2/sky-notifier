@@ -1,0 +1,12 @@
+[package]
+name = "sky-notifier"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = "1.0.88"
+futures-util = "0.3.30"
+poise = { version = "0.6.1" }
+reqwest = { version = "0.12.7", features = ["json"] }
+serde = { version = "1.0.210", features = ["serde_derive"] }
+tokio = { version = "1.40.0", features = ["rt-multi-thread"] }
