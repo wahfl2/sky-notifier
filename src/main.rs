@@ -1,6 +1,7 @@
 use commands::*;
 use poise::serenity_prelude as serenity;
-use types::{Error, CtxData};
+use serde::Serialize;
+use types::{Context, CtxData, Error};
 
 mod commands;
 mod extensions;
@@ -29,6 +30,17 @@ async fn on_error(error: poise::FrameworkError<'_, CtxData, Error>) {
     }
 }
 
+async fn post_command(ctx: Context<'_>) {
+    let data = ctx.data();
+    let mut map = data.discord_to_mc.lock().await;
+
+    if map.mutated {
+        map.mutated = false;
+
+        // serde_json::to_writer_pretty(writer, &**map);
+    }
+}
+
 #[tokio::main]
 async fn main() {
     let token = std::env::var("DISCORD_BOT_TOKEN").expect("missing DISCORD_BOT_TOKEN");
@@ -40,6 +52,7 @@ async fn main() {
     let options = poise::FrameworkOptions {
         commands,
         on_error: |error| Box::pin(on_error(error)),
+        post_command: |ctx| Box::pin(post_command(ctx)),
         ..Default::default()
     };
 
