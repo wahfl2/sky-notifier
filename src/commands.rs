@@ -1,11 +1,15 @@
-use std::collections::hash_map::Entry;
+use std::collections::{hash_map::Entry, HashMap};
 
+use anyhow::anyhow;
 use poise::{serenity_prelude::{self as serenity, CreateButton, CreateEmbed}, CreateReply};
+use reqwest::Method;
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
-use crate::{extensions::CreateReplyEx, types::{Context, Error}};
+use crate::{extensions::{ContextEx, CreateReplyEx}, responses, types::{Context, Error, McPlayer}};
 
 const MOJANG_API: &str = "https://api.mojang.com";
+const HYPIXEL_API: &str = "https://api.hypixel.net";
 
 #[poise::command(slash_command)]
 pub async fn ping(
@@ -23,22 +27,12 @@ pub async fn link(
     ctx: Context<'_>,
     #[description = "Your Minecraft username"] username: String,
 ) -> Result<(), Error> {
-
-    #[derive(Serialize, Deserialize)]
-    #[serde(rename_all = "camelCase")]
-    struct Response {
-        // name: Option<String>,
-        // id: Option<String>,
-        error_message: Option<String>,
-        // path: Option<String>,
-    }
-
     let res = ctx.data().request_client.get(
         format!("{MOJANG_API}/users/profiles/minecraft/{username}")
     )
     .send()
     .await?
-    .json::<Response>()
+    .json::<responses::mojang::Profile>()
     .await?;
 
     if let Some(msg) = res.error_message {
@@ -49,16 +43,18 @@ pub async fn link(
         )).await?;
 
     } else {
-        
+        let uuid = res.id.unwrap();
+        let new_player = McPlayer::new(username.clone(), Uuid::try_parse(&uuid).expect("Failed to parse uuid"));
+
         let mut map = ctx.data().discord_to_mc.lock().await;
         let entry = map.entry(ctx.author().id.get());
 
         if let Entry::Occupied(mut e) = entry {
             // Previously linked
 
-            let old_username = e.get();
+            let old_player = e.get();
 
-            if *old_username == username {
+            if old_player.uuid == new_player.uuid {
                 let reply = CreateReply::default()
                     .embed(CreateEmbed::new().description(
                         format!("You are already linked to **{username}**!")
@@ -70,7 +66,7 @@ pub async fn link(
 
             let mut reply = CreateReply::default()
                 .embed(CreateEmbed::new().description(
-                    format!("Are you sure you want to unlink from **{old_username}** and link to **{username}** instead?")
+                    format!("Are you sure you want to unlink from **{}** and link to **{username}** instead?", old_player.username)
                 ))
                 .button(CreateButton::new("relink_confirm")
                     .label("Yes")
@@ -95,10 +91,10 @@ pub async fn link(
                 let new_msg;
 
                 if interaction.data.custom_id == "relink_confirm" {
-                    e.insert(username.clone());
-                    new_msg = format!("Successfully linked you to **{username}**.")
+                    e.insert(new_player);
+                    new_msg = format!("Successfully linked you to **{username}**.");
                 } else {
-                    new_msg = format!("You will stay linked to **{old_username}**.")
+                    new_msg = format!("You will stay linked to **{}**.", old_player.username);
                 };
 
                 reply = reply.embed_replace(CreateEmbed::new().description(new_msg));
@@ -113,7 +109,7 @@ pub async fn link(
         } else if let Entry::Vacant(e) = entry {
             // User has never linked
 
-            e.insert(username.clone());
+            e.insert(new_player);
 
             ctx.send(CreateReply::default().embed(
                 CreateEmbed::new().description(
@@ -125,6 +121,62 @@ pub async fn link(
             unreachable!()
         }
     }
+
+    Ok(())
+}
+
+async fn assure_player(
+    ctx: &Context<'_>,
+    username: Option<String>,
+) -> Result<McPlayer, Error> {
+    let player_op = ctx.mc_player().await;
+
+    if let Some(player) = player_op {
+        return Ok(player)
+    }
+
+    if username.is_none() {
+        anyhow::bail!("You are not linked to a Minecraft account")
+    }
+
+    let username = username.unwrap();
+    let res = ctx.data().request_client.get(
+        format!("{MOJANG_API}/users/profiles/minecraft/{username}")
+    )
+    .send()
+    .await?
+    .json::<responses::mojang::Profile>()
+    .await?;
+    
+    if let Some(error_msg) = res.error_message {
+        anyhow::bail!(error_msg)
+    }
+
+    let uuid = res.id.unwrap();
+    Ok(McPlayer::new(username, Uuid::try_parse(&uuid).unwrap()))
+}
+
+#[poise::command(slash_command)]
+pub async fn debug_dump(
+    ctx: Context<'_>,
+    #[description = "Your Minecraft username"] username: Option<String>,
+) -> Result<(), Error> {
+    let player_res = assure_player(&ctx, username).await;
+
+    // TODO: bals
+    
+    let request = ctx.data().request_client.request(
+        Method::GET, 
+        format!("{HYPIXEL_API}/v2/skyblock/profile"),
+    )
+    .header("ApiKey", &ctx.data().hypixel_api_key)
+    .query(&[("uuid", )]);
+
+    let res = request
+        .send().await?
+        .json::<HashMap<String, String>>().await?;
+
+    println!("{res:?}");
 
     Ok(())
 }

@@ -1,11 +1,11 @@
 use commands::*;
 use poise::serenity_prelude as serenity;
-use serde::Serialize;
 use types::{Context, CtxData, Error};
 
 mod commands;
 mod extensions;
 mod types;
+mod responses;
 
 const COMMANDS: &[fn() -> poise::Command<CtxData, Error>] = &[
     ping,
@@ -44,6 +44,7 @@ async fn post_command(ctx: Context<'_>) {
 #[tokio::main]
 async fn main() {
     let token = std::env::var("DISCORD_BOT_TOKEN").expect("missing DISCORD_BOT_TOKEN");
+    let hypixel_api_key = std::env::var("HYPIXEL_API_KEY").expect("missing HYPIXEL_API_KEY");
 
     let intents = serenity::GatewayIntents::non_privileged();
 
@@ -56,12 +57,17 @@ async fn main() {
         ..Default::default()
     };
 
+    let context_data = CtxData {
+        hypixel_api_key,
+        ..Default::default()
+    };
+
     let framework = poise::Framework::builder()
         .options(options)
         .setup(|ctx, _ready, framework| {
             Box::pin(async move {
                 poise::builtins::register_globally(ctx, &framework.options().commands).await?;
-                Ok(CtxData::default())
+                Ok(context_data)
             })
         })
         .build();

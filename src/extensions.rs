@@ -1,5 +1,7 @@
 use poise::{serenity_prelude as serenity, CreateReply};
 
+use crate::types::{Context, McPlayer};
+
 pub trait CreateReplyEx {
     fn button(self, button: serenity::CreateButton) -> Self;
     fn embed_replace(self, embed: serenity::CreateEmbed) -> Self;
@@ -36,5 +38,16 @@ impl CreateReplyEx for CreateReply {
     fn embeds_replace(mut self, embeds: Vec<serenity::CreateEmbed>) -> Self {
         self.embeds = embeds;
         self
+    }
+}
+
+pub trait ContextEx {
+    async fn mc_player(&self) -> Option<McPlayer>;
+}
+
+impl ContextEx for Context<'_> {
+    async fn mc_player(&self) -> Option<McPlayer> {
+        let lock = self.data().discord_to_mc.lock().await;
+        lock.get(&self.author().id.get()).cloned()
     }
 }
