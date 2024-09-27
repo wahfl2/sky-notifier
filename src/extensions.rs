@@ -1,14 +1,19 @@
-use poise::{serenity_prelude as serenity, CreateReply};
+use poise::{serenity_prelude::{self as serenity, CreateEmbed}, CreateReply};
 
 use crate::types::{Context, McPlayer};
 
 pub trait CreateReplyEx {
+    fn simple_embed(description: impl Into<String>) -> Self;
     fn button(self, button: serenity::CreateButton) -> Self;
     fn embed_replace(self, embed: serenity::CreateEmbed) -> Self;
     fn embeds_replace(self, embeds: Vec<serenity::CreateEmbed>) -> Self;
 }
 
 impl CreateReplyEx for CreateReply {
+    fn simple_embed(description: impl Into<String>) -> Self {
+        Self::default().embed(CreateEmbed::new().description(description))
+    }
+
     /// Adds a clickable button to this message.
     ///
     /// Convenience method that wraps [`Self::components`]. Arranges buttons in action rows

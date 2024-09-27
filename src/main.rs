@@ -3,13 +3,16 @@ use poise::serenity_prelude as serenity;
 use types::{Context, CtxData, Error};
 
 mod commands;
+mod constants;
 mod extensions;
 mod types;
 mod responses;
 
 const COMMANDS: &[fn() -> poise::Command<CtxData, Error>] = &[
+    debug_dump,
+    
+    link,
     ping,
-    link
 ];
 
 async fn on_error(error: poise::FrameworkError<'_, CtxData, Error>) {
